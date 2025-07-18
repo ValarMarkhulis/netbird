@@ -68,8 +68,8 @@ github.com/Microsoft/hcsshim v0.12.3 h1:LS9NXqXhMoqNCplK1ApmVSfB4UnVLRDWRapB6EIl
 github.com/Microsoft/hcsshim v0.12.3/go.mod h1:Iyl1WVpZzr+UkzjekHZbV8o5Z9ZkxNGx6CtY2Qg/JVQ=
 github.com/TheJumpCloud/jcapi-go v3.0.0+incompatible h1:hqcTK6ZISdip65SR792lwYJTa/axESA0889D3UlZbLo=
 github.com/TheJumpCloud/jcapi-go v3.0.0+incompatible/go.mod h1:6B1nuc1MUs6c62ODZDl7hVE5Pv7O2XGSkgg2olnq34I=
-github.com/ValarMarkhulis/management-integrations-flow-enabled/integrations v0.0.0-20250712194622-8a405dfe6fac h1:HribHEiV0+y2IK1eYQj/bjip4Y0cVw9mnuHCNYojWrw=
-github.com/ValarMarkhulis/management-integrations-flow-enabled/integrations v0.0.0-20250712194622-8a405dfe6fac/go.mod h1:yR8ThWuleYoGJPRmiVcvLr0Mnkmb1lzMP5xQyRTADaU=
+github.com/ValarMarkhulis/management-integrations-flow-enabled/integrations v0.0.0-20250714094303-759db8f0ff9f h1:az7TD/eWg84mL85ipONc7b+9Gv8lrI+T8UKKyVQDVIk=
+github.com/ValarMarkhulis/management-integrations-flow-enabled/integrations v0.0.0-20250714094303-759db8f0ff9f/go.mod h1:yR8ThWuleYoGJPRmiVcvLr0Mnkmb1lzMP5xQyRTADaU=
 github.com/anmitsu/go-shlex v0.0.0-20200514113438-38f4b401e2be h1:9AeTilPcZAjCFIImctFaOjnTIavg87rW78vTPkQqLI8=
 github.com/anmitsu/go-shlex v0.0.0-20200514113438-38f4b401e2be/go.mod h1:ySMOLuWl6zY27l47sB3qLNK6tF2fkHG55UZxx8oIVo4=
 github.com/antihax/optional v1.0.0/go.mod h1:uupD/76wgC+ih3iEmQUL+0Ugr19nfwCT1kdvxnR2qWY=

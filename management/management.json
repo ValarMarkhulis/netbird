@@ -1,0 +1,111 @@
+{
+    "Stuns": [
+        {
+            "Proto": "udp",
+            "URI": "stun:app.mydomain.com:3478",
+            "Username": "",
+            "Password": ""
+        }
+    ],
+    "TURNConfig": {
+        "TimeBasedCredentials": false,
+        "CredentialsTTL": "12h0m0s",
+        "Secret": "secret",
+        "Turns": [
+            {
+                "Proto": "udp",
+                "URI": "turn:app.mydomain.com:3478",
+                "Username": "self",
+                "Password": "C9QlUBaI9FyCQAQAwLrCYzfNZ8J/GmwEdfjJoIjQCGA"
+            }
+        ]
+    },
+    "Relay": {
+        "Addresses": [
+            "rel://app.mydomain.com:33080"
+        ],
+        "CredentialsTTL": "24h0m0s",
+        "Secret": "TUoRgL+IMT5Sj1enao4fpKzdTqHfTVol5bsz1l6fwZA"
+    },
+    "Signal": {
+        "Proto": "http",
+        "URI": "app.mydomain.com:10000",
+        "Username": "",
+        "Password": ""
+    },
+    "Datadir": "/var/lib/netbird/",
+    "DataStoreEncryptionKey": "xiS19/WFZ4qilsB6e1g/PZ/KXo1Nu2BW9hlFlL0oe6U=",
+    "HttpConfig": {
+        "LetsEncryptDomain": "",
+        "CertFile": "",
+        "CertKey": "",
+        "AuthAudience": "",
+        "AuthIssuer": "https://example.eu.auth0.com/",
+        "AuthUserIDClaim": "",
+        "AuthKeysLocation": "https://example.eu.auth0.com/.well-known/jwks.json",
+        "OIDCConfigEndpoint": "https://example.eu.auth0.com/.well-known/openid-configuration",
+        "IdpSignKeyRefreshEnabled": false,
+        "ExtraAuthAudience": ""
+    },
+    "IdpManagerConfig": {
+        "ManagerType": "none",
+        "ClientConfig": {
+            "Issuer": "https://example.eu.auth0.com",
+            "TokenEndpoint": "https://example.eu.auth0.com/oauth/token",
+            "ClientID": "",
+            "ClientSecret": "",
+            "GrantType": "client_credentials"
+        },
+        "ExtraConfig": {},
+        "Auth0ClientCredentials": null,
+        "AzureClientCredentials": null,
+        "KeycloakClientCredentials": null,
+        "ZitadelClientCredentials": null
+    },
+    "DeviceAuthorizationFlow": {
+        "Provider": "none",
+        "ProviderConfig": {
+            "ClientID": "",
+            "ClientSecret": "",
+            "Domain": "",
+            "Audience": "",
+            "TokenEndpoint": "https://example.eu.auth0.com/oauth/token",
+            "DeviceAuthEndpoint": "https://example.eu.auth0.com/oauth/device/code",
+            "AuthorizationEndpoint": "",
+            "Scope": "openid",
+            "UseIDToken": false,
+            "RedirectURLs": null,
+            "DisablePromptLogin": false,
+            "LoginFlag": 0
+        }
+    },
+    "PKCEAuthorizationFlow": {
+        "ProviderConfig": {
+            "ClientID": "",
+            "ClientSecret": "",
+            "Domain": "",
+            "Audience": "",
+            "TokenEndpoint": "https://example.eu.auth0.com/oauth/token",
+            "DeviceAuthEndpoint": "",
+            "AuthorizationEndpoint": "https://example.eu.auth0.com/authorize",
+            "Scope": "",
+            "UseIDToken": false,
+            "RedirectURLs": [
+                "http://localhost:53000"
+            ],
+            "DisablePromptLogin": false,
+            "LoginFlag": 0
+        }
+    },
+    "StoreConfig": {
+        "Engine": "sqlite"
+    },
+    "ReverseProxy": {
+        "TrustedHTTPProxies": [],
+        "TrustedHTTPProxiesCount": 0,
+        "TrustedPeers": [
+            "0.0.0.0/0"
+        ]
+    },
+    "DisableDefaultPolicy": false
+}

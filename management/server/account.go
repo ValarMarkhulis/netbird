@@ -1824,11 +1824,16 @@ func newAccountWithId(ctx context.Context, accountID, userID, domain string, dis
 			PeerInactivityExpirationEnabled: false,
 			PeerInactivityExpiration:        types.DefaultPeerInactivityExpiration,
 			RoutingPeerDNSResolutionEnabled: true,
+			
+			Extra: &types.ExtraSettings{
+				FlowEnabled: true,
+			},
 		},
 		Onboarding: types.AccountOnboarding{
 			OnboardingFlowPending: true,
 			SignupFormPending:     true,
 		},
+			
 	}
 
 	if err := acc.AddAllGroup(disableDefaultPolicy); err != nil {

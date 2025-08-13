@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/maps"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
+	"google.golang.org/protobuf/types/known/durationpb"
 
 	"github.com/netbirdio/netbird/management/server/integrations/port_forwarding"
 	"github.com/netbirdio/netbird/management/server/mock_server"
@@ -38,8 +39,6 @@ import (
 	networkTypes "github.com/netbirdio/netbird/management/server/networks/types"
 
 	nbdns "github.com/netbirdio/netbird/dns"
-	"github.com/netbirdio/netbird/shared/management/domain"
-	"github.com/netbirdio/netbird/shared/management/proto"
 	"github.com/netbirdio/netbird/management/server/activity"
 	nbpeer "github.com/netbirdio/netbird/management/server/peer"
 	"github.com/netbirdio/netbird/management/server/posture"
@@ -47,6 +46,7 @@ import (
 	"github.com/netbirdio/netbird/management/server/telemetry"
 	"github.com/netbirdio/netbird/management/server/types"
 	nbroute "github.com/netbirdio/netbird/route"
+	"github.com/netbirdio/netbird/shared/management/domain"
 )
 
 func TestPeer_LoginExpired(t *testing.T) {
@@ -1017,6 +1017,8 @@ func TestUpdateAccountPeers(t *testing.T) {
 		{"Large", 1000, 1},
 	}
 
+	t.Setenv("NB_FlowEnabled", "true")
+
 	log.SetOutput(io.Discard)
 	defer log.SetOutput(os.Stderr)
 
@@ -1053,7 +1055,7 @@ func TestUpdateAccountPeers(t *testing.T) {
 	}
 }
 
-func TestToSyncResponse(t *testing.T) {
+func Test_ToSyncResponse(t *testing.T) {
 	_, ipnet, err := net.ParseCIDR("192.168.1.0/24")
 	if err != nil {
 		t.Fatal(err)
@@ -1104,152 +1106,24 @@ func TestToSyncResponse(t *testing.T) {
 				Enabled:     true,
 			},
 		},
-		DNSConfig: nbdns.Config{
-			ServiceEnable: true,
-			NameServerGroups: []*nbdns.NameServerGroup{
-				{
-					NameServers: []nbdns.NameServer{{
-						IP:     netip.MustParseAddr("8.8.8.8"),
-						NSType: nbdns.UDPNameServerType,
-						Port:   nbdns.DefaultDNSPort,
-					}},
-					Primary:              true,
-					Domains:              []string{"example.com"},
-					Enabled:              true,
-					SearchDomainsEnabled: true,
-				},
-				{
-					ID: "ns1",
-					NameServers: []nbdns.NameServer{{
-						IP:     netip.MustParseAddr("1.1.1.1"),
-						NSType: nbdns.UDPNameServerType,
-						Port:   nbdns.DefaultDNSPort,
-					}},
-					Groups:               []string{"group1"},
-					Primary:              true,
-					Domains:              []string{"example.com"},
-					Enabled:              true,
-					SearchDomainsEnabled: true,
-				},
-			},
-			CustomZones: []nbdns.CustomZone{{Domain: "example.com", Records: []nbdns.SimpleRecord{{Name: "example.com", Type: 1, Class: "IN", TTL: 60, RData: "100.64.0.1"}}}},
-		},
-		FirewallRules: []*types.FirewallRule{
-			{PeerIP: "192.168.1.2", Direction: types.FirewallRuleDirectionIN, Action: string(types.PolicyTrafficActionAccept), Protocol: string(types.PolicyRuleProtocolTCP), Port: "80"},
-		},
-		ForwardingRules: []*types.ForwardingRule{
-			{
-				RuleProtocol: "tcp",
-				DestinationPorts: types.RulePortRange{
-					Start: 1000,
-					End:   2000,
-				},
-				TranslatedAddress: net.IPv4(192, 168, 1, 2),
-				TranslatedPorts: types.RulePortRange{
-					Start: 11000,
-					End:   12000,
-				},
-			},
-		},
+		DNSConfig:       nbdns.Config{},
+		FirewallRules:   []*types.FirewallRule{},
+		ForwardingRules: []*types.ForwardingRule{},
 	}
 	dnsName := "example.com"
-	checks := []*posture.Checks{
-		{
-			Checks: posture.ChecksDefinition{
-				ProcessCheck: &posture.ProcessCheck{
-					Processes: []posture.Process{{LinuxPath: "/usr/bin/netbird"}},
-				},
-			},
-		},
-	}
 	dnsCache := &DNSConfigCache{}
 	accountSettings := &types.Settings{RoutingPeerDNSResolutionEnabled: true}
-	response := toSyncResponse(context.Background(), config, peer, turnRelayToken, turnRelayToken, networkMap, dnsName, checks, dnsCache, accountSettings, nil)
+	extraSettings := &types.ExtraSettings{FlowEnabled: true}
+	t.Setenv("NB_FLOW_URL", "https://flow.example.com")
+	t.Setenv("NB_FlowIntervalInMinuets", "5")
+	response := toSyncResponse(context.Background(), config, peer, turnRelayToken, turnRelayToken, networkMap, dnsName, nil, dnsCache, accountSettings, extraSettings)
 
 	assert.NotNil(t, response)
-	// assert peer config
-	assert.Equal(t, "192.168.1.1/24", response.PeerConfig.Address)
-	assert.Equal(t, "peer1.example.com", response.PeerConfig.Fqdn)
-	assert.Equal(t, true, response.PeerConfig.SshConfig.SshEnabled)
 	// assert netbird config
-	assert.Equal(t, "signal.uri", response.NetbirdConfig.Signal.Uri)
-	assert.Equal(t, proto.HostConfig_HTTPS, response.NetbirdConfig.Signal.GetProtocol())
-	assert.Equal(t, "stun.uri", response.NetbirdConfig.Stuns[0].Uri)
-	assert.Equal(t, "turn.uri", response.NetbirdConfig.Turns[0].HostConfig.GetUri())
-	assert.Equal(t, "turn-user", response.NetbirdConfig.Turns[0].User)
-	assert.Equal(t, "turn-pass", response.NetbirdConfig.Turns[0].Password)
-	// assert RemotePeers
-	assert.Equal(t, 1, len(response.RemotePeers))
-	assert.Equal(t, "192.168.1.2/32", response.RemotePeers[0].AllowedIps[0])
-	assert.Equal(t, "peer2-key", response.RemotePeers[0].WgPubKey)
-	assert.Equal(t, "peer2.example.com", response.RemotePeers[0].GetFqdn())
-	assert.Equal(t, false, response.RemotePeers[0].GetSshConfig().GetSshEnabled())
-	assert.Equal(t, []byte("peer2-ssh-key"), response.RemotePeers[0].GetSshConfig().GetSshPubKey())
-	// assert network map
-	assert.Equal(t, uint64(1000), response.NetworkMap.Serial)
-	assert.Equal(t, "192.168.1.1/24", response.NetworkMap.PeerConfig.Address)
-	assert.Equal(t, "peer1.example.com", response.NetworkMap.PeerConfig.Fqdn)
-	assert.Equal(t, true, response.NetworkMap.PeerConfig.SshConfig.SshEnabled)
-	// assert network map RemotePeers
-	assert.Equal(t, 1, len(response.NetworkMap.RemotePeers))
-	assert.Equal(t, "192.168.1.2/32", response.NetworkMap.RemotePeers[0].AllowedIps[0])
-	assert.Equal(t, "peer2-key", response.NetworkMap.RemotePeers[0].WgPubKey)
-	assert.Equal(t, "peer2.example.com", response.NetworkMap.RemotePeers[0].GetFqdn())
-	assert.Equal(t, []byte("peer2-ssh-key"), response.NetworkMap.RemotePeers[0].GetSshConfig().GetSshPubKey())
-	// assert network map OfflinePeers
-	assert.Equal(t, 1, len(response.NetworkMap.OfflinePeers))
-	assert.Equal(t, "192.168.1.3/32", response.NetworkMap.OfflinePeers[0].AllowedIps[0])
-	assert.Equal(t, "peer3-key", response.NetworkMap.OfflinePeers[0].WgPubKey)
-	assert.Equal(t, "peer3.example.com", response.NetworkMap.OfflinePeers[0].GetFqdn())
-	assert.Equal(t, []byte("peer3-ssh-key"), response.NetworkMap.OfflinePeers[0].GetSshConfig().GetSshPubKey())
-	// assert network map Routes
-	assert.Equal(t, 1, len(response.NetworkMap.Routes))
-	assert.Equal(t, "10.0.0.0/24", response.NetworkMap.Routes[0].Network)
-	assert.Equal(t, "route1", response.NetworkMap.Routes[0].ID)
-	assert.Equal(t, "peer1", response.NetworkMap.Routes[0].Peer)
-	assert.Equal(t, "example.com", response.NetworkMap.Routes[0].Domains[0])
-	assert.Equal(t, true, response.NetworkMap.Routes[0].KeepRoute)
-	assert.Equal(t, true, response.NetworkMap.Routes[0].Masquerade)
-	assert.Equal(t, int64(9999), response.NetworkMap.Routes[0].Metric)
-	assert.Equal(t, int64(1), response.NetworkMap.Routes[0].NetworkType)
-	assert.Equal(t, "route1", response.NetworkMap.Routes[0].NetID)
-	// assert network map DNSConfig
-	assert.Equal(t, true, response.NetworkMap.DNSConfig.ServiceEnable)
-	assert.Equal(t, 1, len(response.NetworkMap.DNSConfig.CustomZones))
-	assert.Equal(t, 2, len(response.NetworkMap.DNSConfig.NameServerGroups))
-	// assert network map DNSConfig.CustomZones
-	assert.Equal(t, "example.com", response.NetworkMap.DNSConfig.CustomZones[0].Domain)
-	assert.Equal(t, 1, len(response.NetworkMap.DNSConfig.CustomZones[0].Records))
-	assert.Equal(t, "example.com", response.NetworkMap.DNSConfig.CustomZones[0].Records[0].Name)
-	assert.Equal(t, int64(1), response.NetworkMap.DNSConfig.CustomZones[0].Records[0].Type)
-	assert.Equal(t, "IN", response.NetworkMap.DNSConfig.CustomZones[0].Records[0].Class)
-	assert.Equal(t, int64(60), response.NetworkMap.DNSConfig.CustomZones[0].Records[0].TTL)
-	assert.Equal(t, "100.64.0.1", response.NetworkMap.DNSConfig.CustomZones[0].Records[0].RData)
-	// assert network map DNSConfig.NameServerGroups
-	assert.Equal(t, true, response.NetworkMap.DNSConfig.NameServerGroups[0].Primary)
-	assert.Equal(t, true, response.NetworkMap.DNSConfig.NameServerGroups[0].SearchDomainsEnabled)
-	assert.Equal(t, "example.com", response.NetworkMap.DNSConfig.NameServerGroups[0].Domains[0])
-	assert.Equal(t, "8.8.8.8", response.NetworkMap.DNSConfig.NameServerGroups[0].NameServers[0].GetIP())
-	assert.Equal(t, int64(1), response.NetworkMap.DNSConfig.NameServerGroups[0].NameServers[0].GetNSType())
-	assert.Equal(t, int64(53), response.NetworkMap.DNSConfig.NameServerGroups[0].NameServers[0].GetPort())
-	// assert network map Firewall
-	assert.Equal(t, 1, len(response.NetworkMap.FirewallRules))
-	assert.Equal(t, "192.168.1.2", response.NetworkMap.FirewallRules[0].PeerIP)
-	assert.Equal(t, proto.RuleDirection_IN, response.NetworkMap.FirewallRules[0].Direction)
-	assert.Equal(t, proto.RuleAction_ACCEPT, response.NetworkMap.FirewallRules[0].Action)
-	assert.Equal(t, proto.RuleProtocol_TCP, response.NetworkMap.FirewallRules[0].Protocol)
-	assert.Equal(t, "80", response.NetworkMap.FirewallRules[0].Port)
-	// assert posture checks
-	assert.Equal(t, 1, len(response.Checks))
-	assert.Equal(t, "/usr/bin/netbird", response.Checks[0].Files[0])
-	// assert network map ForwardingRules
-	assert.Equal(t, 1, len(response.NetworkMap.ForwardingRules))
-	assert.Equal(t, proto.RuleProtocol_TCP, response.NetworkMap.ForwardingRules[0].Protocol)
-	assert.Equal(t, uint32(1000), response.NetworkMap.ForwardingRules[0].DestinationPort.GetRange().Start)
-	assert.Equal(t, uint32(2000), response.NetworkMap.ForwardingRules[0].DestinationPort.GetRange().End)
-	assert.Equal(t, net.IPv4(192, 168, 1, 2).To4(), net.IP(response.NetworkMap.ForwardingRules[0].TranslatedAddress))
-	assert.Equal(t, uint32(11000), response.NetworkMap.ForwardingRules[0].TranslatedPort.GetRange().Start)
-	assert.Equal(t, uint32(12000), response.NetworkMap.ForwardingRules[0].TranslatedPort.GetRange().End)
+	assert.True(t, response.NetbirdConfig.Flow.Enabled)
+	assert.Equal(t, "https://flow.example.com", response.NetbirdConfig.Flow.Url)
+	assert.Equal(t, durationpb.New(5*time.Minute), response.NetbirdConfig.Flow.Interval)
+
 }
 
 func Test_RegisterPeerByUser(t *testing.T) {

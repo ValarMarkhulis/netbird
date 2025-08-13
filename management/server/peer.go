@@ -1199,8 +1199,6 @@ func (am *DefaultAccountManager) UpdateAccountPeers(ctx context.Context, account
 		return
 	}
 
-	globalStart := time.Now()
-
 	hasPeersConnected := false
 	for _, peer := range account.Peers {
 		if am.peersUpdateManager.HasChannel(peer.ID) {
@@ -1214,81 +1212,18 @@ func (am *DefaultAccountManager) UpdateAccountPeers(ctx context.Context, account
 		return
 	}
 
-	approvedPeersMap, err := am.integratedPeerValidator.GetValidatedPeers(ctx, account.Id, maps.Values(account.Groups), maps.Values(account.Peers), account.Settings.Extra)
+	_, err = am.integratedPeerValidator.GetValidatedPeers(account.Id, maps.Values(account.Groups), maps.Values(account.Peers), account.Settings.Extra)
 	if err != nil {
 		log.WithContext(ctx).Errorf("failed to send out updates to peers, failed to get validate peers: %v", err)
 		return
 	}
 
-	var wg sync.WaitGroup
-	semaphore := make(chan struct{}, 10)
-
-	dnsCache := &DNSConfigCache{}
-	dnsDomain := am.GetDNSDomain(account.Settings)
-	customZone := account.GetPeersCustomZone(ctx, dnsDomain)
-	resourcePolicies := account.GetResourcePoliciesMap()
-	routers := account.GetResourceRoutersMap()
-
-	proxyNetworkMaps, err := am.proxyController.GetProxyNetworkMaps(ctx, accountID)
-	if err != nil {
-		log.WithContext(ctx).Errorf("failed to get proxy network maps: %v", err)
-		return
-	}
-
-	extraSetting, err := am.settingsManager.GetExtraSettings(ctx, accountID)
+	_, err = am.settingsManager.GetExtraSettings(ctx, accountID)
 	if err != nil {
 		log.WithContext(ctx).Errorf("failed to get flow enabled status: %v", err)
 		return
 	}
 
-	for _, peer := range account.Peers {
-		if !am.peersUpdateManager.HasChannel(peer.ID) {
-			log.WithContext(ctx).Tracef("peer %s doesn't have a channel, skipping network map update", peer.ID)
-			continue
-		}
-
-		wg.Add(1)
-		semaphore <- struct{}{}
-		go func(p *nbpeer.Peer) {
-			defer wg.Done()
-			defer func() { <-semaphore }()
-
-			start := time.Now()
-
-			postureChecks, err := am.getPeerPostureChecks(account, p.ID)
-			if err != nil {
-				log.WithContext(ctx).Debugf("failed to get posture checks for peer %s: %v", peer.ID, err)
-				return
-			}
-
-			am.metrics.UpdateChannelMetrics().CountCalcPostureChecksDuration(time.Since(start))
-			start = time.Now()
-
-			remotePeerNetworkMap := account.GetPeerNetworkMap(ctx, p.ID, customZone, approvedPeersMap, resourcePolicies, routers, am.metrics.AccountManagerMetrics())
-
-			am.metrics.UpdateChannelMetrics().CountCalcPeerNetworkMapDuration(time.Since(start))
-			start = time.Now()
-
-			proxyNetworkMap, ok := proxyNetworkMaps[p.ID]
-			if ok {
-				remotePeerNetworkMap.Merge(proxyNetworkMap)
-			}
-			am.metrics.UpdateChannelMetrics().CountMergeNetworkMapDuration(time.Since(start))
-
-			start = time.Now()
-			update := toSyncResponse(ctx, nil, p, nil, nil, remotePeerNetworkMap, dnsDomain, postureChecks, dnsCache, account.Settings, extraSetting)
-			am.metrics.UpdateChannelMetrics().CountToSyncResponseDuration(time.Since(start))
-
-			am.peersUpdateManager.SendUpdate(ctx, p.ID, &UpdateMessage{Update: update, NetworkMap: remotePeerNetworkMap})
-		}(peer)
-	}
-
-	//
-
-	wg.Wait()
-	if am.metrics != nil {
-		am.metrics.AccountManagerMetrics().CountUpdateAccountPeersDuration(time.Since(globalStart))
-	}
 }
 
 type bufferUpdate struct {

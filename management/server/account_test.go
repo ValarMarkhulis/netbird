@@ -14,12 +14,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
+	"github.com/netbirdio/management-integrations/integrations"
 	nbdns "github.com/netbirdio/netbird/dns"
 	nbAccount "github.com/netbirdio/netbird/management/server/account"
 	"github.com/netbirdio/netbird/management/server/activity"
@@ -1795,6 +1795,7 @@ func TestDefaultAccountManager_DefaultAccountSettings(t *testing.T) {
 }
 
 func TestDefaultAccountManager_UpdatePeer_PeerLoginExpiration(t *testing.T) {
+	t.Setenv("NB_FlowEnabled", "true")
 	manager, err := createManager(t)
 	require.NoError(t, err, "unable to create account manager")
 
@@ -2876,22 +2877,12 @@ func createManager(t testing.TB) (*DefaultAccountManager, error) {
 		return nil, err
 	}
 
-	ctrl := gomock.NewController(t)
-	t.Cleanup(ctrl.Finish)
-
-	settingsMockManager := settings.NewMockManager(ctrl)
-	settingsMockManager.EXPECT().
-		GetExtraSettings(gomock.Any(), gomock.Any()).
-		Return(&types.ExtraSettings{}, nil).
-		AnyTimes()
-	settingsMockManager.EXPECT().
-		UpdateExtraSettings(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		Return(false, nil).
-		AnyTimes()
-
 	permissionsManager := permissions.NewManager(store)
 
-	manager, err := BuildManager(context.Background(), store, NewPeersUpdateManager(nil), nil, "", "netbird.cloud", eventStore, nil, false, MockIntegratedValidator{}, metrics, port_forwarding.NewControllerMock(), settingsMockManager, permissionsManager, false)
+	extraSettingsManager := integrations.NewManager(eventStore)
+
+	settingsManager := settings.NewManager(store, nil, extraSettingsManager, permissionsManager)
+	manager, err := BuildManager(context.Background(), store, NewPeersUpdateManager(nil), nil, "", "netbird.cloud", eventStore, nil, false, MockIntegratedValidator{}, metrics, port_forwarding.NewControllerMock(), settingsManager, permissionsManager, false)
 	if err != nil {
 		return nil, err
 	}

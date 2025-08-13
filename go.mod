@@ -261,4 +261,4 @@ replace github.com/pion/ice/v3 => github.com/netbirdio/ice/v3 v3.0.0-20240315174
 
 replace github.com/libp2p/go-netroute => github.com/netbirdio/go-netroute v0.0.0-20240611143515-f59b0e1d3944
 
-replace github.com/netbirdio/management-integrations/integrations => ../management-integrations-flow-enabled/integrations
+replace github.com/netbirdio/management-integrations/integrations => github.com/ValarMarkhulis/management-integrations-flow-enabled/integrations v0.0.0-20250813062713-1734015c2a23

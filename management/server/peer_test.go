@@ -1116,7 +1116,7 @@ func Test_ToSyncResponse(t *testing.T) {
 	extraSettings := &types.ExtraSettings{FlowEnabled: true}
 	t.Setenv("NB_FLOW_URL", "https://flow.example.com")
 	t.Setenv("NB_FlowIntervalInMinuets", "5")
-	response := toSyncResponse(context.Background(), config, peer, turnRelayToken, turnRelayToken, networkMap, dnsName, nil, dnsCache, accountSettings, extraSettings)
+	response := toSyncResponse(context.Background(), config, peer, turnRelayToken, turnRelayToken, networkMap, dnsName, nil, dnsCache, accountSettings, extraSettings, []string{})
 
 	assert.NotNil(t, response)
 	// assert netbird config

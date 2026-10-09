@@ -40,7 +40,6 @@ import (
 
 	"github.com/netbirdio/netbird/encryption"
 	"github.com/netbirdio/netbird/formatter/hook"
-	mgmtProto "github.com/netbirdio/netbird/shared/management/proto"
 	"github.com/netbirdio/netbird/management/server"
 	"github.com/netbirdio/netbird/management/server/auth"
 	nbContext "github.com/netbirdio/netbird/management/server/context"
@@ -52,10 +51,12 @@ import (
 	"github.com/netbirdio/netbird/management/server/networks"
 	"github.com/netbirdio/netbird/management/server/networks/resources"
 	"github.com/netbirdio/netbird/management/server/networks/routers"
+	"github.com/netbirdio/netbird/management/server/networktraffic/flowstore"
 	"github.com/netbirdio/netbird/management/server/settings"
 	"github.com/netbirdio/netbird/management/server/store"
 	"github.com/netbirdio/netbird/management/server/telemetry"
 	"github.com/netbirdio/netbird/management/server/users"
+	mgmtProto "github.com/netbirdio/netbird/shared/management/proto"
 	"github.com/netbirdio/netbird/util"
 	"github.com/netbirdio/netbird/version"
 )
@@ -203,6 +204,22 @@ var (
 				log.WithContext(ctx).Infof("geolocation service has been initialized from %s", config.Datadir)
 			}
 
+			// Optional: GET /api/events/network-traffic reads from a
+			// separate, independently-deployed flow-event Postgres database
+			// (see https://github.com/ValarMarkhulis/traffic-event-logger).
+			// Unset -> the route simply isn't registered, see
+			// networktraffic.AddEndpoints.
+			var networkTrafficStore *flowstore.Store
+			if dsn, ok := os.LookupEnv("NB_NETWORK_TRAFFIC_POSTGRES_DSN"); ok && dsn != "" {
+				networkTrafficStore, err = flowstore.New(dsn)
+				if err != nil {
+					log.WithContext(ctx).Warnf("could not connect to network traffic database, /api/events/network-traffic will be unavailable: %v", err)
+					networkTrafficStore = nil
+				} else {
+					log.WithContext(ctx).Info("network traffic events store initialized")
+				}
+			}
+
 			integratedPeerValidator, err := integrations.NewIntegratedValidator(ctx, eventStore)
 			if err != nil {
 				return fmt.Errorf("initialize integrated peer validator: %v", err)
@@ -282,7 +299,7 @@ var (
 			routersManager := routers.NewManager(store, permissionsManager, accountManager)
 			networksManager := networks.NewManager(store, permissionsManager, resourcesManager, routersManager, accountManager)
 
-			httpAPIHandler, err := nbhttp.NewAPIHandler(ctx, accountManager, networksManager, resourcesManager, routersManager, groupsManager, geo, authManager, appMetrics, integratedPeerValidator, proxyController, permissionsManager, peersManager, settingsManager)
+			httpAPIHandler, err := nbhttp.NewAPIHandler(ctx, accountManager, networksManager, resourcesManager, routersManager, groupsManager, geo, authManager, appMetrics, integratedPeerValidator, proxyController, permissionsManager, peersManager, settingsManager, networkTrafficStore)
 
 			if err != nil {
 				return fmt.Errorf("failed creating HTTP API handler: %v", err)

@@ -23,7 +23,10 @@ import (
 	"github.com/netbirdio/netbird/management/server/http/handlers/dns"
 	"github.com/netbirdio/netbird/management/server/http/handlers/events"
 	"github.com/netbirdio/netbird/management/server/http/handlers/groups"
+	"github.com/netbirdio/netbird/management/server/http/handlers/instance"
 	"github.com/netbirdio/netbird/management/server/http/handlers/networks"
+	"github.com/netbirdio/netbird/management/server/http/handlers/networktraffic"
+	"github.com/netbirdio/netbird/management/server/http/handlers/notifications"
 	"github.com/netbirdio/netbird/management/server/http/handlers/peers"
 	"github.com/netbirdio/netbird/management/server/http/handlers/policies"
 	"github.com/netbirdio/netbird/management/server/http/handlers/routes"
@@ -34,6 +37,7 @@ import (
 	nbnetworks "github.com/netbirdio/netbird/management/server/networks"
 	"github.com/netbirdio/netbird/management/server/networks/resources"
 	"github.com/netbirdio/netbird/management/server/networks/routers"
+	"github.com/netbirdio/netbird/management/server/networktraffic/flowstore"
 	nbpeers "github.com/netbirdio/netbird/management/server/peers"
 	"github.com/netbirdio/netbird/management/server/telemetry"
 )
@@ -56,6 +60,7 @@ func NewAPIHandler(
 	permissionsManager permissions.Manager,
 	peersManager nbpeers.Manager,
 	settingsManager settings.Manager,
+	networkTrafficStore *flowstore.Store,
 ) (http.Handler, error) {
 
 	authMiddleware := middleware.NewAuthMiddleware(
@@ -90,6 +95,9 @@ func NewAPIHandler(
 	routes.AddEndpoints(accountManager, router)
 	dns.AddEndpoints(accountManager, router)
 	events.AddEndpoints(accountManager, router)
+	instance.AddEndpoints(router)
+	notifications.AddEndpoints(accountManager, permissionsManager, router)
+	networktraffic.AddEndpoints(accountManager, LocationManager, permissionsManager, networkTrafficStore, router)
 	networks.AddEndpoints(networksManager, resourceManager, routerManager, groupsManager, accountManager, router)
 
 	return rootRouter, nil

@@ -31,9 +31,9 @@ func ts(seconds int) time.Time {
 
 func TestQueryFlowGroups_GroupsByPublicKeyAndFlowID(t *testing.T) {
 	store := newTestStore(t, []EventLogRow{
-		{PublicKey: "peerA", FlowID: "flow1", Type: "TYPE_START", CreatedAt: ts(0), Protocol: "TCP", SourceIP: "10.0.0.1", DestIP: "10.0.0.2"},
-		{PublicKey: "peerA", FlowID: "flow1", Type: "TYPE_END", CreatedAt: ts(5), Protocol: "TCP", SourceIP: "10.0.0.1", DestIP: "10.0.0.2", RxBytes: 100},
-		{PublicKey: "peerB", FlowID: "flow2", Type: "TYPE_START", CreatedAt: ts(1), Protocol: "UDP", SourceIP: "10.0.0.3", DestIP: "10.0.0.4"},
+		{PublicKey: "peerA", FlowID: "flow1", Type: "TYPE_START", EventTime: ts(0), Protocol: "TCP", SourceIP: "10.0.0.1", DestIP: "10.0.0.2"},
+		{PublicKey: "peerA", FlowID: "flow1", Type: "TYPE_END", EventTime: ts(5), Protocol: "TCP", SourceIP: "10.0.0.1", DestIP: "10.0.0.2", RxBytes: 100},
+		{PublicKey: "peerB", FlowID: "flow2", Type: "TYPE_START", EventTime: ts(1), Protocol: "UDP", SourceIP: "10.0.0.3", DestIP: "10.0.0.4"},
 	})
 
 	groups, total, err := store.QueryFlowGroups(context.Background(), Filter{AccountPublicKeys: []string{"peerA", "peerB"}}, 1, 10)
@@ -50,7 +50,7 @@ func TestQueryFlowGroups_GroupsByPublicKeyAndFlowID(t *testing.T) {
 	assert.Equal(t, "peerA", groups[1].PublicKey)
 	assert.Equal(t, "flow1", groups[1].FlowID)
 	require.Len(t, groups[1].Rows, 2)
-	// Rows within a group are sorted ascending by CreatedAt.
+	// Rows within a group are sorted ascending by EventTime.
 	assert.Equal(t, "TYPE_START", groups[1].Rows[0].Type)
 	assert.Equal(t, "TYPE_END", groups[1].Rows[1].Type)
 	assert.EqualValues(t, 100, groups[1].Rows[1].RxBytes)
@@ -61,7 +61,7 @@ func TestQueryFlowGroups_Pagination(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		rows = append(rows, EventLogRow{
 			PublicKey: "peer", FlowID: "flow" + string(rune('0'+i)),
-			Type: "TYPE_START", CreatedAt: ts(i), Protocol: "TCP",
+			Type: "TYPE_START", EventTime: ts(i), Protocol: "TCP",
 		})
 	}
 	store := newTestStore(t, rows)
@@ -90,8 +90,8 @@ func TestQueryFlowGroups_Pagination(t *testing.T) {
 
 func TestQueryFlowGroups_FilterByDateRange(t *testing.T) {
 	store := newTestStore(t, []EventLogRow{
-		{PublicKey: "p", FlowID: "old", Type: "TYPE_START", CreatedAt: ts(0)},
-		{PublicKey: "p", FlowID: "new", Type: "TYPE_START", CreatedAt: ts(100)},
+		{PublicKey: "p", FlowID: "old", Type: "TYPE_START", EventTime: ts(0)},
+		{PublicKey: "p", FlowID: "new", Type: "TYPE_START", EventTime: ts(100)},
 	})
 
 	start := ts(50)
@@ -104,8 +104,8 @@ func TestQueryFlowGroups_FilterByDateRange(t *testing.T) {
 
 func TestQueryFlowGroups_FilterByPublicKeys(t *testing.T) {
 	store := newTestStore(t, []EventLogRow{
-		{PublicKey: "peerA", FlowID: "f1", Type: "TYPE_START", CreatedAt: ts(0)},
-		{PublicKey: "peerB", FlowID: "f2", Type: "TYPE_START", CreatedAt: ts(1)},
+		{PublicKey: "peerA", FlowID: "f1", Type: "TYPE_START", EventTime: ts(0)},
+		{PublicKey: "peerB", FlowID: "f2", Type: "TYPE_START", EventTime: ts(1)},
 	})
 
 	groups, total, err := store.QueryFlowGroups(context.Background(), Filter{AccountPublicKeys: []string{"peerA", "peerB"}, PublicKeys: []string{"peerA"}}, 1, 10)
@@ -117,8 +117,8 @@ func TestQueryFlowGroups_FilterByPublicKeys(t *testing.T) {
 
 func TestQueryFlowGroups_FilterByDirection(t *testing.T) {
 	store := newTestStore(t, []EventLogRow{
-		{PublicKey: "p", FlowID: "in", Type: "TYPE_START", Direction: "ingress", CreatedAt: ts(0)},
-		{PublicKey: "p", FlowID: "out", Type: "TYPE_START", Direction: "egress", CreatedAt: ts(1)},
+		{PublicKey: "p", FlowID: "in", Type: "TYPE_START", Direction: "ingress", EventTime: ts(0)},
+		{PublicKey: "p", FlowID: "out", Type: "TYPE_START", Direction: "egress", EventTime: ts(1)},
 	})
 
 	groups, total, err := store.QueryFlowGroups(context.Background(), Filter{AccountPublicKeys: []string{"p"}, Direction: "egress"}, 1, 10)
@@ -130,8 +130,8 @@ func TestQueryFlowGroups_FilterByDirection(t *testing.T) {
 
 func TestQueryFlowGroups_FilterByProtocolNames(t *testing.T) {
 	store := newTestStore(t, []EventLogRow{
-		{PublicKey: "p", FlowID: "tcp", Type: "TYPE_START", Protocol: "TCP", CreatedAt: ts(0)},
-		{PublicKey: "p", FlowID: "udp", Type: "TYPE_START", Protocol: "UDP", CreatedAt: ts(1)},
+		{PublicKey: "p", FlowID: "tcp", Type: "TYPE_START", Protocol: "TCP", EventTime: ts(0)},
+		{PublicKey: "p", FlowID: "udp", Type: "TYPE_START", Protocol: "UDP", EventTime: ts(1)},
 	})
 
 	groups, total, err := store.QueryFlowGroups(context.Background(), Filter{AccountPublicKeys: []string{"p"}, ProtocolNames: ProtocolNumberToNames(17)}, 1, 10)
@@ -143,8 +143,8 @@ func TestQueryFlowGroups_FilterByProtocolNames(t *testing.T) {
 
 func TestQueryFlowGroups_FilterByConnectionType(t *testing.T) {
 	store := newTestStore(t, []EventLogRow{
-		{PublicKey: "p", FlowID: "p2p", Type: "TYPE_START", CreatedAt: ts(0)},
-		{PublicKey: "p", FlowID: "routed", Type: "TYPE_START", DestResourceID: "res1", CreatedAt: ts(1)},
+		{PublicKey: "p", FlowID: "p2p", Type: "TYPE_START", EventTime: ts(0)},
+		{PublicKey: "p", FlowID: "routed", Type: "TYPE_START", DestResourceID: "res1", EventTime: ts(1)},
 	})
 
 	routed, total, err := store.QueryFlowGroups(context.Background(), Filter{AccountPublicKeys: []string{"p"}, ConnectionType: "ROUTED"}, 1, 10)
@@ -162,8 +162,8 @@ func TestQueryFlowGroups_FilterByConnectionType(t *testing.T) {
 
 func TestQueryFlowGroups_SearchLikeMatchesIPSubstring(t *testing.T) {
 	store := newTestStore(t, []EventLogRow{
-		{PublicKey: "p", FlowID: "match", Type: "TYPE_START", SourceIP: "100.64.1.5", CreatedAt: ts(0)},
-		{PublicKey: "p", FlowID: "nomatch", Type: "TYPE_START", SourceIP: "10.0.0.1", CreatedAt: ts(1)},
+		{PublicKey: "p", FlowID: "match", Type: "TYPE_START", SourceIP: "100.64.1.5", EventTime: ts(0)},
+		{PublicKey: "p", FlowID: "nomatch", Type: "TYPE_START", SourceIP: "10.0.0.1", EventTime: ts(1)},
 	})
 
 	groups, total, err := store.QueryFlowGroups(context.Background(), Filter{AccountPublicKeys: []string{"p"}, SearchLike: "100.64"}, 1, 10)
@@ -177,8 +177,8 @@ func TestQueryFlowGroups_SearchPublicKeysComposesWithPagination(t *testing.T) {
 	// search resolved to a candidate public key must still produce an exact
 	// total_records count, not just filter within a page.
 	store := newTestStore(t, []EventLogRow{
-		{PublicKey: "aliceKey", FlowID: "f1", Type: "TYPE_START", SourceIP: "1.1.1.1", CreatedAt: ts(0)},
-		{PublicKey: "bobKey", FlowID: "f2", Type: "TYPE_START", SourceIP: "2.2.2.2", CreatedAt: ts(1)},
+		{PublicKey: "aliceKey", FlowID: "f1", Type: "TYPE_START", SourceIP: "1.1.1.1", EventTime: ts(0)},
+		{PublicKey: "bobKey", FlowID: "f2", Type: "TYPE_START", SourceIP: "2.2.2.2", EventTime: ts(1)},
 	})
 
 	groups, total, err := store.QueryFlowGroups(context.Background(), Filter{AccountPublicKeys: []string{"aliceKey", "bobKey"}, SearchPublicKeys: []string{"aliceKey"}}, 1, 10)
@@ -190,7 +190,7 @@ func TestQueryFlowGroups_SearchPublicKeysComposesWithPagination(t *testing.T) {
 
 func TestQueryFlowGroups_NoMatches(t *testing.T) {
 	store := newTestStore(t, []EventLogRow{
-		{PublicKey: "p", FlowID: "f1", Type: "TYPE_START", CreatedAt: ts(0)},
+		{PublicKey: "p", FlowID: "f1", Type: "TYPE_START", EventTime: ts(0)},
 	})
 
 	groups, total, err := store.QueryFlowGroups(context.Background(), Filter{AccountPublicKeys: []string{"p"}, PublicKeys: []string{"nobody"}}, 1, 10)
@@ -206,8 +206,8 @@ func TestQueryFlowGroups_AccountPublicKeysEnforcesIsolation(t *testing.T) {
 	// safe). Querying as one account must never surface the other's rows,
 	// even with every other filter left wide open.
 	store := newTestStore(t, []EventLogRow{
-		{PublicKey: "account1-peer", FlowID: "f1", Type: "TYPE_START", CreatedAt: ts(0), SourceIP: "10.0.0.1"},
-		{PublicKey: "account2-peer", FlowID: "f2", Type: "TYPE_START", CreatedAt: ts(1), SourceIP: "10.0.0.2"},
+		{PublicKey: "account1-peer", FlowID: "f1", Type: "TYPE_START", EventTime: ts(0), SourceIP: "10.0.0.1"},
+		{PublicKey: "account2-peer", FlowID: "f2", Type: "TYPE_START", EventTime: ts(1), SourceIP: "10.0.0.2"},
 	})
 
 	groups, total, err := store.QueryFlowGroups(context.Background(), Filter{
@@ -232,7 +232,7 @@ func TestQueryFlowGroups_EmptyAccountPublicKeysMatchesNothing(t *testing.T) {
 	// The fail-closed guarantee: forgetting to set AccountPublicKeys (a
 	// caller bug) must drop all data, never silently return everything.
 	store := newTestStore(t, []EventLogRow{
-		{PublicKey: "p", FlowID: "f1", Type: "TYPE_START", CreatedAt: ts(0)},
+		{PublicKey: "p", FlowID: "f1", Type: "TYPE_START", EventTime: ts(0)},
 	})
 
 	groups, total, err := store.QueryFlowGroups(context.Background(), Filter{}, 1, 10)
@@ -253,4 +253,37 @@ func TestProtocolNumberNameRoundTrip(t *testing.T) {
 	assert.Equal(t, []string{"47"}, ProtocolNumberToNames(47))
 	assert.Equal(t, 47, ProtocolNameToNumber("47"))
 	assert.Equal(t, 0, ProtocolNameToNumber("garbage"))
+}
+
+// One report batch can carry a flow's END before its START (and both arrive
+// long after they happened); rows and groups must follow event_time.
+func TestQueryFlowGroups_OrdersByEventTimeNotInsertOrder(t *testing.T) {
+	store := newTestStore(t, []EventLogRow{
+		{PublicKey: "p", FlowID: "long", Type: "TYPE_END", EventTime: ts(50)},
+		{PublicKey: "p", FlowID: "long", Type: "TYPE_START", EventTime: ts(5)},
+		{PublicKey: "p", FlowID: "later", Type: "TYPE_START", EventTime: ts(30)},
+	})
+
+	groups, _, err := store.QueryFlowGroups(context.Background(), Filter{AccountPublicKeys: []string{"p"}}, 1, 10)
+	require.NoError(t, err)
+	require.Len(t, groups, 2)
+	assert.Equal(t, "later", groups[0].FlowID, "newest flow by first event time first")
+	require.Len(t, groups[1].Rows, 2)
+	assert.Equal(t, "TYPE_START", groups[1].Rows[0].Type)
+	assert.Equal(t, "TYPE_END", groups[1].Rows[1].Type)
+}
+
+func TestQueryFlowGroups_DateRangeFiltersOnEventTime(t *testing.T) {
+	store := newTestStore(t, []EventLogRow{
+		{PublicKey: "p", FlowID: "before", Type: "TYPE_START", EventTime: ts(5)},
+		{PublicKey: "p", FlowID: "inside", Type: "TYPE_START", EventTime: ts(20)},
+		{PublicKey: "p", FlowID: "after", Type: "TYPE_START", EventTime: ts(40)},
+	})
+
+	start, end := ts(10), ts(30)
+	groups, total, err := store.QueryFlowGroups(context.Background(), Filter{AccountPublicKeys: []string{"p"}, StartDate: &start, EndDate: &end}, 1, 10)
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, total)
+	require.Len(t, groups, 1)
+	assert.Equal(t, "inside", groups[0].FlowID)
 }

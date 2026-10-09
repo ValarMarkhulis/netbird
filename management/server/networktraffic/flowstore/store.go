@@ -29,8 +29,11 @@ import (
 // database.EventLog/database.FlowFields in traffic-event-logger).
 // This package only ever reads from it, never migrates or writes it.
 type EventLogRow struct {
-	ID               uint      `gorm:"column:id"`
-	CreatedAt        time.Time `gorm:"column:created_at"`
+	ID uint `gorm:"column:id"`
+	// EventTime is when the event happened on the reporting peer. Not
+	// created_at: peers report in batches, so created_at is the batch's
+	// arrival time and would put a flow's start and end in the same second.
+	EventTime        time.Time `gorm:"column:event_time"`
 	PublicKey        string    `gorm:"column:public_key"`
 	FlowID           string    `gorm:"column:flow_id"`
 	Type             string    `gorm:"column:type"`
@@ -62,7 +65,7 @@ func (EventLogRow) TableName() string { return "event_logs" }
 type FlowGroup struct {
 	PublicKey string
 	FlowID    string
-	// Rows is sorted by CreatedAt ascending.
+	// Rows is sorted by EventTime ascending.
 	Rows []EventLogRow
 }
 
@@ -166,7 +169,7 @@ func (s *Store) QueryFlowGroups(ctx context.Context, f Filter, page, pageSize in
 
 	var keys []groupKey
 	err := filtered.Session(&gorm.Session{}).
-		Select("public_key, flow_id, MIN(created_at) as first_seen").
+		Select("public_key, flow_id, MIN(event_time) as first_seen").
 		Group("public_key, flow_id").
 		Order("first_seen DESC").
 		Offset((page - 1) * pageSize).
@@ -200,7 +203,7 @@ func (s *Store) QueryFlowGroups(ctx context.Context, f Filter, page, pageSize in
 	var rows []EventLogRow
 	if err := s.db.WithContext(ctx).Model(&EventLogRow{}).
 		Where(whereSQL, args...).
-		Order("created_at ASC").
+		Order("event_time ASC, id ASC").
 		Find(&rows).Error; err != nil {
 		return nil, 0, fmt.Errorf("fetch flow group rows: %w", err)
 	}
@@ -236,10 +239,10 @@ func applyFilter(q *gorm.DB, f Filter) *gorm.DB {
 	}
 	q = q.Where("public_key IN ?", f.AccountPublicKeys)
 	if f.StartDate != nil {
-		q = q.Where("created_at >= ?", *f.StartDate)
+		q = q.Where("event_time >= ?", *f.StartDate)
 	}
 	if f.EndDate != nil {
-		q = q.Where("created_at <= ?", *f.EndDate)
+		q = q.Where("event_time <= ?", *f.EndDate)
 	}
 	if len(f.PublicKeys) > 0 {
 		q = q.Where("public_key IN ?", f.PublicKeys)

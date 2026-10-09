@@ -222,7 +222,7 @@ func toAPIEvent(g flowstore.FlowGroup, e *enricher) api.NetworkTrafficEvent {
 	for _, row := range g.Rows {
 		subEvents = append(subEvents, api.NetworkTrafficSubEvent{
 			Type:      row.Type,
-			Timestamp: row.CreatedAt,
+			Timestamp: row.EventTime,
 		})
 	}
 

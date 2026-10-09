@@ -56,13 +56,13 @@ func TestToAPIEvent_BasicMapping(t *testing.T) {
 		Rows: []flowstore.EventLogRow{
 			{
 				PublicKey: "pubkey1", FlowID: "flow1", Type: "TYPE_START",
-				CreatedAt: start, Protocol: "TCP", Direction: "egress",
+				EventTime: start, Protocol: "TCP", Direction: "egress",
 				SourceIP: "100.64.0.1", DestIP: "100.64.0.2",
 				ConnSourcePort: 51234, ConnDestPort: 443,
 			},
 			{
 				PublicKey: "pubkey1", FlowID: "flow1", Type: "TYPE_END",
-				CreatedAt: end, Protocol: "TCP", Direction: "egress",
+				EventTime: end, Protocol: "TCP", Direction: "egress",
 				SourceIP: "100.64.0.1", DestIP: "100.64.0.2",
 				ConnSourcePort: 51234, ConnDestPort: 443,
 				RxBytes: 100, TxBytes: 200, RxPackets: 2, TxPackets: 3,
@@ -98,7 +98,7 @@ func TestToAPIEvent_UnresolvedReporterFallsBackToPublicKey(t *testing.T) {
 		PublicKey: "unknown-pubkey",
 		FlowID:    "flow1",
 		Rows: []flowstore.EventLogRow{
-			{PublicKey: "unknown-pubkey", FlowID: "flow1", Type: "TYPE_START", CreatedAt: time.Now()},
+			{PublicKey: "unknown-pubkey", FlowID: "flow1", Type: "TYPE_START", EventTime: time.Now()},
 		},
 	}
 	ev := toAPIEvent(group, e)
@@ -111,7 +111,7 @@ func TestToAPIEvent_UnknownDirectionMapsToDirectionUnknown(t *testing.T) {
 		PublicKey: "pubkey1",
 		FlowID:    "flow1",
 		Rows: []flowstore.EventLogRow{
-			{PublicKey: "pubkey1", FlowID: "flow1", Type: "TYPE_START", Direction: "unknown", CreatedAt: time.Now()},
+			{PublicKey: "pubkey1", FlowID: "flow1", Type: "TYPE_START", Direction: "unknown", EventTime: time.Now()},
 		},
 	}
 	ev := toAPIEvent(group, e)
@@ -157,8 +157,8 @@ func authedNetworkTrafficRequest() *http.Request {
 // query -- must only ever surface account1's own peer's row.
 func TestGetNetworkTrafficEvents_AccountIsolation(t *testing.T) {
 	flowStore := seedFlowStore(t, []flowstore.EventLogRow{
-		{PublicKey: "pubkey1", FlowID: "f1", Type: "TYPE_START", CreatedAt: time.Now(), SourceIP: "10.0.0.1"},
-		{PublicKey: "other-account-peer", FlowID: "f2", Type: "TYPE_START", CreatedAt: time.Now(), SourceIP: "10.0.0.2"},
+		{PublicKey: "pubkey1", FlowID: "f1", Type: "TYPE_START", EventTime: time.Now(), SourceIP: "10.0.0.1"},
+		{PublicKey: "other-account-peer", FlowID: "f2", Type: "TYPE_START", EventTime: time.Now(), SourceIP: "10.0.0.2"},
 	})
 
 	h := &handler{

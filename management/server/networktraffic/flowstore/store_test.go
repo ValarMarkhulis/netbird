@@ -36,7 +36,7 @@ func TestQueryFlowGroups_GroupsByPublicKeyAndFlowID(t *testing.T) {
 		{PublicKey: "peerB", FlowID: "flow2", Type: "TYPE_START", CreatedAt: ts(1), Protocol: "UDP", SourceIP: "10.0.0.3", DestIP: "10.0.0.4"},
 	})
 
-	groups, total, err := store.QueryFlowGroups(context.Background(), Filter{}, 1, 10)
+	groups, total, err := store.QueryFlowGroups(context.Background(), Filter{AccountPublicKeys: []string{"peerA", "peerB"}}, 1, 10)
 	require.NoError(t, err)
 	assert.EqualValues(t, 2, total)
 	require.Len(t, groups, 2)
@@ -66,7 +66,7 @@ func TestQueryFlowGroups_Pagination(t *testing.T) {
 	}
 	store := newTestStore(t, rows)
 
-	page1, total, err := store.QueryFlowGroups(context.Background(), Filter{}, 1, 2)
+	page1, total, err := store.QueryFlowGroups(context.Background(), Filter{AccountPublicKeys: []string{"peer"}}, 1, 2)
 	require.NoError(t, err)
 	assert.EqualValues(t, 5, total)
 	assert.Len(t, page1, 2)
@@ -74,14 +74,14 @@ func TestQueryFlowGroups_Pagination(t *testing.T) {
 	assert.Equal(t, "flow4", page1[0].FlowID)
 	assert.Equal(t, "flow3", page1[1].FlowID)
 
-	page2, total, err := store.QueryFlowGroups(context.Background(), Filter{}, 2, 2)
+	page2, total, err := store.QueryFlowGroups(context.Background(), Filter{AccountPublicKeys: []string{"peer"}}, 2, 2)
 	require.NoError(t, err)
 	assert.EqualValues(t, 5, total)
 	assert.Len(t, page2, 2)
 	assert.Equal(t, "flow2", page2[0].FlowID)
 	assert.Equal(t, "flow1", page2[1].FlowID)
 
-	page3, total, err := store.QueryFlowGroups(context.Background(), Filter{}, 3, 2)
+	page3, total, err := store.QueryFlowGroups(context.Background(), Filter{AccountPublicKeys: []string{"peer"}}, 3, 2)
 	require.NoError(t, err)
 	assert.EqualValues(t, 5, total)
 	require.Len(t, page3, 1)
@@ -95,7 +95,7 @@ func TestQueryFlowGroups_FilterByDateRange(t *testing.T) {
 	})
 
 	start := ts(50)
-	groups, total, err := store.QueryFlowGroups(context.Background(), Filter{StartDate: &start}, 1, 10)
+	groups, total, err := store.QueryFlowGroups(context.Background(), Filter{AccountPublicKeys: []string{"p"}, StartDate: &start}, 1, 10)
 	require.NoError(t, err)
 	assert.EqualValues(t, 1, total)
 	require.Len(t, groups, 1)
@@ -108,7 +108,7 @@ func TestQueryFlowGroups_FilterByPublicKeys(t *testing.T) {
 		{PublicKey: "peerB", FlowID: "f2", Type: "TYPE_START", CreatedAt: ts(1)},
 	})
 
-	groups, total, err := store.QueryFlowGroups(context.Background(), Filter{PublicKeys: []string{"peerA"}}, 1, 10)
+	groups, total, err := store.QueryFlowGroups(context.Background(), Filter{AccountPublicKeys: []string{"peerA", "peerB"}, PublicKeys: []string{"peerA"}}, 1, 10)
 	require.NoError(t, err)
 	assert.EqualValues(t, 1, total)
 	require.Len(t, groups, 1)
@@ -121,7 +121,7 @@ func TestQueryFlowGroups_FilterByDirection(t *testing.T) {
 		{PublicKey: "p", FlowID: "out", Type: "TYPE_START", Direction: "egress", CreatedAt: ts(1)},
 	})
 
-	groups, total, err := store.QueryFlowGroups(context.Background(), Filter{Direction: "egress"}, 1, 10)
+	groups, total, err := store.QueryFlowGroups(context.Background(), Filter{AccountPublicKeys: []string{"p"}, Direction: "egress"}, 1, 10)
 	require.NoError(t, err)
 	assert.EqualValues(t, 1, total)
 	require.Len(t, groups, 1)
@@ -134,7 +134,7 @@ func TestQueryFlowGroups_FilterByProtocolNames(t *testing.T) {
 		{PublicKey: "p", FlowID: "udp", Type: "TYPE_START", Protocol: "UDP", CreatedAt: ts(1)},
 	})
 
-	groups, total, err := store.QueryFlowGroups(context.Background(), Filter{ProtocolNames: ProtocolNumberToNames(17)}, 1, 10)
+	groups, total, err := store.QueryFlowGroups(context.Background(), Filter{AccountPublicKeys: []string{"p"}, ProtocolNames: ProtocolNumberToNames(17)}, 1, 10)
 	require.NoError(t, err)
 	assert.EqualValues(t, 1, total)
 	require.Len(t, groups, 1)
@@ -147,13 +147,13 @@ func TestQueryFlowGroups_FilterByConnectionType(t *testing.T) {
 		{PublicKey: "p", FlowID: "routed", Type: "TYPE_START", DestResourceID: "res1", CreatedAt: ts(1)},
 	})
 
-	routed, total, err := store.QueryFlowGroups(context.Background(), Filter{ConnectionType: "ROUTED"}, 1, 10)
+	routed, total, err := store.QueryFlowGroups(context.Background(), Filter{AccountPublicKeys: []string{"p"}, ConnectionType: "ROUTED"}, 1, 10)
 	require.NoError(t, err)
 	assert.EqualValues(t, 1, total)
 	require.Len(t, routed, 1)
 	assert.Equal(t, "routed", routed[0].FlowID)
 
-	p2p, total, err := store.QueryFlowGroups(context.Background(), Filter{ConnectionType: "P2P"}, 1, 10)
+	p2p, total, err := store.QueryFlowGroups(context.Background(), Filter{AccountPublicKeys: []string{"p"}, ConnectionType: "P2P"}, 1, 10)
 	require.NoError(t, err)
 	assert.EqualValues(t, 1, total)
 	require.Len(t, p2p, 1)
@@ -166,7 +166,7 @@ func TestQueryFlowGroups_SearchLikeMatchesIPSubstring(t *testing.T) {
 		{PublicKey: "p", FlowID: "nomatch", Type: "TYPE_START", SourceIP: "10.0.0.1", CreatedAt: ts(1)},
 	})
 
-	groups, total, err := store.QueryFlowGroups(context.Background(), Filter{SearchLike: "100.64"}, 1, 10)
+	groups, total, err := store.QueryFlowGroups(context.Background(), Filter{AccountPublicKeys: []string{"p"}, SearchLike: "100.64"}, 1, 10)
 	require.NoError(t, err)
 	assert.EqualValues(t, 1, total)
 	require.Len(t, groups, 1)
@@ -181,7 +181,7 @@ func TestQueryFlowGroups_SearchPublicKeysComposesWithPagination(t *testing.T) {
 		{PublicKey: "bobKey", FlowID: "f2", Type: "TYPE_START", SourceIP: "2.2.2.2", CreatedAt: ts(1)},
 	})
 
-	groups, total, err := store.QueryFlowGroups(context.Background(), Filter{SearchPublicKeys: []string{"aliceKey"}}, 1, 10)
+	groups, total, err := store.QueryFlowGroups(context.Background(), Filter{AccountPublicKeys: []string{"aliceKey", "bobKey"}, SearchPublicKeys: []string{"aliceKey"}}, 1, 10)
 	require.NoError(t, err)
 	assert.EqualValues(t, 1, total)
 	require.Len(t, groups, 1)
@@ -193,7 +193,49 @@ func TestQueryFlowGroups_NoMatches(t *testing.T) {
 		{PublicKey: "p", FlowID: "f1", Type: "TYPE_START", CreatedAt: ts(0)},
 	})
 
-	groups, total, err := store.QueryFlowGroups(context.Background(), Filter{PublicKeys: []string{"nobody"}}, 1, 10)
+	groups, total, err := store.QueryFlowGroups(context.Background(), Filter{AccountPublicKeys: []string{"p"}, PublicKeys: []string{"nobody"}}, 1, 10)
+	require.NoError(t, err)
+	assert.EqualValues(t, 0, total)
+	assert.Empty(t, groups)
+}
+
+func TestQueryFlowGroups_AccountPublicKeysEnforcesIsolation(t *testing.T) {
+	// Two different accounts' peers' events sitting in the same event_logs
+	// table (a single flowstore DSN shared across multiple NetBird
+	// accounts, as infrastructure_files/setup.env.example now documents as
+	// safe). Querying as one account must never surface the other's rows,
+	// even with every other filter left wide open.
+	store := newTestStore(t, []EventLogRow{
+		{PublicKey: "account1-peer", FlowID: "f1", Type: "TYPE_START", CreatedAt: ts(0), SourceIP: "10.0.0.1"},
+		{PublicKey: "account2-peer", FlowID: "f2", Type: "TYPE_START", CreatedAt: ts(1), SourceIP: "10.0.0.2"},
+	})
+
+	groups, total, err := store.QueryFlowGroups(context.Background(), Filter{
+		AccountPublicKeys: []string{"account1-peer"},
+	}, 1, 10)
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, total)
+	require.Len(t, groups, 1)
+	assert.Equal(t, "account1-peer", groups[0].PublicKey)
+
+	// Querying as the other account sees only its own peer's row.
+	groups, total, err = store.QueryFlowGroups(context.Background(), Filter{
+		AccountPublicKeys: []string{"account2-peer"},
+	}, 1, 10)
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, total)
+	require.Len(t, groups, 1)
+	assert.Equal(t, "account2-peer", groups[0].PublicKey)
+}
+
+func TestQueryFlowGroups_EmptyAccountPublicKeysMatchesNothing(t *testing.T) {
+	// The fail-closed guarantee: forgetting to set AccountPublicKeys (a
+	// caller bug) must drop all data, never silently return everything.
+	store := newTestStore(t, []EventLogRow{
+		{PublicKey: "p", FlowID: "f1", Type: "TYPE_START", CreatedAt: ts(0)},
+	})
+
+	groups, total, err := store.QueryFlowGroups(context.Background(), Filter{}, 1, 10)
 	require.NoError(t, err)
 	assert.EqualValues(t, 0, total)
 	assert.Empty(t, groups)

@@ -1,17 +1,29 @@
 package networktraffic
 
 import (
+	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 
+	nbcontext "github.com/netbirdio/netbird/management/server/context"
 	"github.com/netbirdio/netbird/management/server/geolocation"
+	"github.com/netbirdio/netbird/management/server/mock_server"
 	"github.com/netbirdio/netbird/management/server/networktraffic/flowstore"
+	"github.com/netbirdio/netbird/management/server/permissions"
+	"github.com/netbirdio/netbird/management/server/permissions/modules"
+	"github.com/netbirdio/netbird/management/server/permissions/operations"
+	"github.com/netbirdio/netbird/management/server/types"
+	"github.com/netbirdio/netbird/shared/management/http/api"
 )
 
 func TestIntersect(t *testing.T) {
@@ -104,4 +116,109 @@ func TestToAPIEvent_UnknownDirectionMapsToDirectionUnknown(t *testing.T) {
 	}
 	ev := toAPIEvent(group, e)
 	assert.Equal(t, "DIRECTION_UNKNOWN", ev.Direction)
+}
+
+// seedFlowStore opens an in-memory SQLite flowstore and seeds it with rows.
+// Mirrors flowstore's own test helper (not exported across packages).
+func seedFlowStore(t *testing.T, rows []flowstore.EventLogRow) *flowstore.Store {
+	t.Helper()
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&flowstore.EventLogRow{}))
+	if len(rows) > 0 {
+		require.NoError(t, db.Create(&rows).Error)
+	}
+	return flowstore.NewWithDB(db)
+}
+
+func allowPermissionsMock(t *testing.T) permissions.Manager {
+	t.Helper()
+	ctrl := gomock.NewController(t)
+	m := permissions.NewMockManager(ctrl)
+	m.EXPECT().
+		ValidateUserPermissions(gomock.Any(), gomock.Any(), gomock.Any(), modules.NetworkTraffic, operations.Read).
+		Return(true, nil).
+		AnyTimes()
+	return m
+}
+
+func authedNetworkTrafficRequest() *http.Request {
+	req := httptest.NewRequest(http.MethodGet, "/events/network-traffic", nil)
+	return nbcontext.SetUserAuthInRequest(req, nbcontext.UserAuth{
+		UserId:    "user1",
+		AccountId: "account1",
+	})
+}
+
+// TestGetNetworkTrafficEvents_AccountIsolation is the end-to-end regression
+// test for the account-boundary fix: two different accounts' peers' rows
+// sit in the same event_logs table (a shared flowstore DSN), and the full
+// HTTP handler path -- auth, enrichment, filter construction, flowstore
+// query -- must only ever surface account1's own peer's row.
+func TestGetNetworkTrafficEvents_AccountIsolation(t *testing.T) {
+	flowStore := seedFlowStore(t, []flowstore.EventLogRow{
+		{PublicKey: "pubkey1", FlowID: "f1", Type: "TYPE_START", CreatedAt: time.Now(), SourceIP: "10.0.0.1"},
+		{PublicKey: "other-account-peer", FlowID: "f2", Type: "TYPE_START", CreatedAt: time.Now(), SourceIP: "10.0.0.2"},
+	})
+
+	h := &handler{
+		accountManager: &mock_server.MockAccountManager{
+			GetAccountFunc: func(ctx context.Context, accountID string) (*types.Account, error) {
+				return testAccount(), nil // only has peers pubkey1/pubkey2
+			},
+			GetUsersFromAccountFunc: func(ctx context.Context, accountID, userID string) (map[string]*types.UserInfo, error) {
+				return map[string]*types.UserInfo{}, nil
+			},
+		},
+		geolocationManager: &geolocation.Mock{},
+		permissionsManager: allowPermissionsMock(t),
+		flowStore:          flowStore,
+	}
+
+	recorder := httptest.NewRecorder()
+	h.getNetworkTrafficEvents(recorder, authedNetworkTrafficRequest())
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	var body api.NetworkTrafficEventsResponse
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &body))
+
+	require.Len(t, body.Data, 1, "must see exactly its own account's flow, never the other account's")
+	assert.Equal(t, "f1", body.Data[0].FlowId)
+	assert.EqualValues(t, 1, body.TotalRecords)
+}
+
+// TestGetNetworkTrafficEvents_ZeroPeersShortCircuits proves the short
+// circuit actually skips flowstore entirely: the store wraps an already
+// -closed DB connection, so any real query would error. A brand new
+// account with no peers yet must still get a clean empty 200, not a
+// 500 from a doomed query.
+func TestGetNetworkTrafficEvents_ZeroPeersShortCircuits(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	require.NoError(t, sqlDB.Close()) // any query against this now errors
+
+	h := &handler{
+		accountManager: &mock_server.MockAccountManager{
+			GetAccountFunc: func(ctx context.Context, accountID string) (*types.Account, error) {
+				return &types.Account{Id: "account-brand-new"}, nil // no Peers
+			},
+			GetUsersFromAccountFunc: func(ctx context.Context, accountID, userID string) (map[string]*types.UserInfo, error) {
+				return map[string]*types.UserInfo{}, nil
+			},
+		},
+		geolocationManager: &geolocation.Mock{},
+		permissionsManager: allowPermissionsMock(t),
+		flowStore:          flowstore.NewWithDB(db),
+	}
+
+	recorder := httptest.NewRecorder()
+	h.getNetworkTrafficEvents(recorder, authedNetworkTrafficRequest())
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	var body api.NetworkTrafficEventsResponse
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &body))
+	assert.Empty(t, body.Data)
+	assert.EqualValues(t, 0, body.TotalRecords)
 }

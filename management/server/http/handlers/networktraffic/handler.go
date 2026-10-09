@@ -9,13 +9,15 @@
 // than duplicating flow collection inside management itself. See
 // management/server/networktraffic/flowstore for that read path.
 //
-// IMPORTANT CAVEAT: the event_logs table flowstore reads has no account_id
-// column — it's single-tenant by design (it was built for a single
-// self-hosted deployment). This handler scopes every lookup it does to the
-// caller's own account, but the underlying flow data itself is NOT
-// account-scoped. Do not wire this up against a flowstore DSN that's shared
-// across more than one NetBird account — it would leak one account's
-// traffic into another's Traffic Events view.
+// Multi-tenant note: event_logs itself has no account_id column, since it's
+// written by the independent flow server with no concept of NetBird
+// accounts at all. This handler enforces account isolation itself: every
+// query is restricted to the calling account's own peers' public keys
+// (flowstore.Filter.AccountPublicKeys, derived from GetAccount below, and
+// enforced fail-closed inside flowstore even if a caller forgot to set it).
+// A single flowstore DSN can safely be shared across multiple NetBird
+// accounts on this management server -- each account only ever sees rows
+// reported by its own peers. See enricher.accountPublicKeys.
 package networktraffic
 
 import (
@@ -113,14 +115,33 @@ func (h *handler) getNetworkTrafficEvents(w http.ResponseWriter, r *http.Request
 	enricher := newEnricher(acc, h.geolocationManager)
 	enricher.userInfos = userInfos
 
+	accountPublicKeys := enricher.accountPublicKeys()
+	if len(accountPublicKeys) == 0 {
+		// No peers in this account yet -- short-circuit rather than ever
+		// reaching flowstore. Not just an optimization: flowstore's own
+		// fail-closed empty-allowlist handling would return the same
+		// empty result, but this avoids a DB round trip for the common
+		// brand-new-account case and keeps the "empty means deny" rule
+		// enforced at both layers independently.
+		util.WriteJSONObject(ctx, w, &api.NetworkTrafficEventsResponse{
+			Data:         []api.NetworkTrafficEvent{},
+			Page:         q.page,
+			PageSize:     q.pageSize,
+			TotalRecords: 0,
+			TotalPages:   0,
+		})
+		return
+	}
+
 	filter := flowstore.Filter{
-		StartDate:      q.startDate,
-		EndDate:        q.endDate,
-		Direction:      q.direction,
-		ProtocolNames:  q.protocolNames,
-		EventType:      q.eventType,
-		ConnectionType: q.connectionType,
-		SearchLike:     q.search,
+		AccountPublicKeys: accountPublicKeys,
+		StartDate:         q.startDate,
+		EndDate:           q.endDate,
+		Direction:         q.direction,
+		ProtocolNames:     q.protocolNames,
+		EventType:         q.eventType,
+		ConnectionType:    q.connectionType,
+		SearchLike:        q.search,
 	}
 
 	if q.reporterID != "" {

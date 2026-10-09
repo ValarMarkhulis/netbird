@@ -217,3 +217,9 @@ func TestResourceAPIType(t *testing.T) {
 	assert.Equal(t, "DOMAIN_RESOURCE", resourceAPIType(resourceTypes.Domain))
 	assert.Equal(t, "UNKNOWN", resourceAPIType(resourceTypes.NetworkResourceType("something-new")))
 }
+
+func TestEnricher_AccountPublicKeys(t *testing.T) {
+	e := newEnricher(testAccount(), &geolocation.Mock{})
+	keys := e.accountPublicKeys()
+	assert.ElementsMatch(t, []string{"pubkey1", "pubkey2"}, keys)
+}

@@ -2,9 +2,15 @@
 // by the independent traffic-event-logger flow server + ETL
 // (https://github.com/ValarMarkhulis/traffic-event-logger). It is
 // deliberately separate from the management server's own account store:
-// it never writes, and it has no notion of NetBird accounts (the
-// event_logs table is single-tenant — see the package-level caveat in
-// management/server/http/handlers/networktraffic).
+// it never writes, and the event_logs table itself has no account_id
+// column — a peer's owning account is only known to management's own
+// store, not to this database.
+//
+// Every query through this package MUST set Filter.AccountPublicKeys to the
+// calling account's own peers (see the handler package, which derives it
+// from a GetAccount call). applyFilter enforces this fail-closed: an empty
+// or unset AccountPublicKeys matches zero rows rather than everything, so a
+// caller bug drops data instead of leaking another account's.
 package flowstore
 
 import (
@@ -67,10 +73,18 @@ type FlowGroup struct {
 // expected to already be resolved by the caller — this package only knows
 // about event_logs, not peers/accounts.
 type Filter struct {
-	StartDate *time.Time
-	EndDate   *time.Time
+	// AccountPublicKeys is the calling account's own peers' public keys.
+	// MANDATORY on every call — not optional like the fields below. See
+	// the package doc and applyFilter: empty means "match nothing", not
+	// "no restriction", specifically so this can never be bypassed by
+	// leaving it unset.
+	AccountPublicKeys []string
+	StartDate         *time.Time
+	EndDate           *time.Time
 	// PublicKeys, if non-empty, restricts results to rows reported by one
-	// of these peers (used for reporter_id/user_id filters).
+	// of these peers (used for reporter_id/user_id filters). Composes with
+	// AccountPublicKeys via AND — this can only narrow further, never
+	// widen past the account boundary.
 	PublicKeys []string
 	// Direction matches the stored lowercase value ("ingress"/"egress").
 	// Empty means no filter.
@@ -209,6 +223,18 @@ func (s *Store) QueryFlowGroups(ctx context.Context, f Filter, page, pageSize in
 }
 
 func applyFilter(q *gorm.DB, f Filter) *gorm.DB {
+	if len(f.AccountPublicKeys) == 0 {
+		// Fail closed: deliberately not "if len > 0 { restrict }" like
+		// every other filter field — an empty allowlist must match
+		// nothing, since the only way it's empty is a caller bug (an
+		// account must always have been resolved to *some* key list, even
+		// if that list is the account's own zero peers, which the handler
+		// short-circuits before ever reaching here). Expressed as a literal
+		// false rather than relying on driver-specific empty-IN-clause
+		// behavior.
+		return q.Where("1 = 0")
+	}
+	q = q.Where("public_key IN ?", f.AccountPublicKeys)
 	if f.StartDate != nil {
 		q = q.Where("created_at >= ?", *f.StartDate)
 	}

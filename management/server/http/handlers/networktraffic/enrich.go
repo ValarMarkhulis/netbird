@@ -62,6 +62,19 @@ func newEnricher(account *types.Account, geo geolocation.Geolocation) *enricher 
 	return e
 }
 
+// accountPublicKeys returns every public key belonging to a peer in this
+// account — the mandatory allowlist passed to flowstore as
+// Filter.AccountPublicKeys, since event_logs itself has no account_id
+// column. See the package doc on flowstore.Filter for why this must never
+// be skipped.
+func (e *enricher) accountPublicKeys() []string {
+	keys := make([]string, 0, len(e.peersByPubKey))
+	for pk := range e.peersByPubKey {
+		keys = append(keys, pk)
+	}
+	return keys
+}
+
 // publicKeyForPeerID resolves a `reporter_id` query value (a peer ID) to its
 // WireGuard public key — the only identifier event_logs rows carry. Returns
 // "" if no such peer exists in the account.

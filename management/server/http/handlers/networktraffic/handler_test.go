@@ -92,6 +92,24 @@ func TestToAPIEvent_BasicMapping(t *testing.T) {
 	assert.Equal(t, 0, ev.Icmp.Code)
 }
 
+// Peers put the rule ID only on TYPE_START; an ended flow must keep its policy.
+func TestToAPIEvent_PolicyComesFromStartEventOfEndedFlow(t *testing.T) {
+	e := newEnricher(testAccount(), &geolocation.Mock{})
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	group := flowstore.FlowGroup{
+		PublicKey: "pubkey1",
+		FlowID:    "flow1",
+		Rows: []flowstore.EventLogRow{
+			{PublicKey: "pubkey1", FlowID: "flow1", Type: "TYPE_START", EventTime: start, RuleID: "rule1"},
+			{PublicKey: "pubkey1", FlowID: "flow1", Type: "TYPE_END", EventTime: start.Add(time.Minute)},
+		},
+	}
+
+	ev := toAPIEvent(group, e)
+
+	assert.Equal(t, "policy1", ev.Policy.Id)
+}
+
 func TestToAPIEvent_UnresolvedReporterFallsBackToPublicKey(t *testing.T) {
 	e := newEnricher(testAccount(), &geolocation.Mock{})
 	group := flowstore.FlowGroup{

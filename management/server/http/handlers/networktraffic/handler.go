@@ -215,6 +215,18 @@ func intersect(a, b []string) []string {
 	return out
 }
 
+// flowRuleID is the rule that allowed the flow. Peers only put it on the
+// TYPE_START event (END events carry none), so it can't come from the latest
+// row like the counters do.
+func flowRuleID(rows []flowstore.EventLogRow) string {
+	for _, row := range rows {
+		if row.RuleID != "" {
+			return row.RuleID
+		}
+	}
+	return ""
+}
+
 func toAPIEvent(g flowstore.FlowGroup, e *enricher) api.NetworkTrafficEvent {
 	latest := g.Rows[len(g.Rows)-1]
 
@@ -245,7 +257,7 @@ func toAPIEvent(g flowstore.FlowGroup, e *enricher) api.NetworkTrafficEvent {
 		Source:      e.resolveEndpoint(latest.SourceIP, latest.SourceResourceID, latest.ConnSourcePort),
 		Destination: e.resolveEndpoint(latest.DestIP, latest.DestResourceID, latest.ConnDestPort),
 		User:        e.resolveUser(g.PublicKey),
-		Policy:      e.resolvePolicy(latest.RuleID),
+		Policy:      e.resolvePolicy(flowRuleID(g.Rows)),
 		Icmp: api.NetworkTrafficICMP{
 			Type: int(latest.IcmpType),
 			Code: int(latest.IcmpCode),
